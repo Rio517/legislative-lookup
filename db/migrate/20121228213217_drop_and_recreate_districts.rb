@@ -5,11 +5,12 @@ class DropAndRecreateDistricts < ActiveRecord::Migration
   drop_table(:districts) if table_exists?(:districts)
   def self.up
     create_table :districts do |t|
-      t.string :state, :length => 2
-      t.string :cd, :length => 3
-      t.string :name, :length => 90
+      t.string :state,    :length => 2
+      t.string :cd,       :length => 3
+      t.string :name,     :length => 90
       t.column :the_geom, :multi_polygon
-      t.string :level, :length => 255
+      t.string :level,    :length => 255
+      t.references
     end
     add_index :districts, :the_geom, :spatial=>true
   end

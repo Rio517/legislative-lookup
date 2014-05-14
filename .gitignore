@@ -1,7 +1,5 @@
 log/*.log
 tmp/**/*
 .DS_Store
-db/2013/zips/
-db/2013/shapes/
-db/2013/sql/
-config/database.yml
+db/zips/*
+db/shapes/*

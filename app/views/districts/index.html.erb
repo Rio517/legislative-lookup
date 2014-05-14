@@ -1,0 +1,114 @@
+<h2>Legislative Lookup: <span>Updated with 113th Congress for 2013!</span></h2>
+
+<div id="geo-box">
+  <form id="address_form">
+    <h3>Address</h3>
+    <input type="text" id="address" name="address" value="45 Main Street, Ste. 520 Brooklyn, NY 11201" />
+    <select name="date" id="date">
+       <%= options_for_select(Scheduler.public_options, params[:level]) %>
+    </select>
+    <input type="submit" value="Lookup" class="button cupid-green"/>
+    <input type="button" id="clear" value="Clear" class="button clean-gray"/>
+  </form>
+</div>
+<div id="map-canvas"></div>
+
+<div id="notice" style="display:none;"></div>
+
+<h4>API Documentation</h4>
+
+<p>Mobile Commons Legislative Lookup matches a latitude and longitude with the congressional and state legislative districts for that location. It is provided free of charge with no warranty. If you use this service please cache your responses and behave responsibly. If you plan to send more than a few thousand queries per day, let us know via the list before you start.</p>
+<p>The API returns valid districts for the current date, however, you can pass in a <code>?date=</code> param and the API will find any valid districts for your target date.  We have virtually all districting changes that have or will occur from 2003 to 2016. Texas is the notable exception, with a trial set for July 2014 to review their redistricting process.  Advanced users may want to view state maps <%= link_to "here", state_maps_url %>.</p>
+<p>Join our <a href="http://groups.google.com/group/mcommons-congress-api">low volume mailing list</a> for advance notice of API changes or to ask a question.</p>
+<p>Source code is available under an MIT License at <a href="http://github.com/mcommons/legislative-lookup">http://github.com/mcommons/legislative-lookup</a>.</p>
+
+<div class="api">
+  <p>A query for a latitude and longitude:</p>
+  <a class="api" href="/districts/lookup.xml?lat=40.7145248&amp;lng=-74.007073">http://congress.mcommons.com/districts/lookup.xml?lat=40.7145248&amp;lng=-74.007073</a>
+  <pre><code class="xml">
+<%= <<-EOF
+  <?xml version="1.0" encoding="UTF-8"?>
+  <response>
+    <lat>40.7145248</lat>
+    <lng>-74.007073</lng>
+    <date>2014-04-16 15:16:09</date>
+    <federal>
+      <state>NY</state>
+      <district>10</district>
+      <display_name>NY 10th</display_name>
+      <date_source>
+        <organization>U.S. Census</organization>
+        <url>http://www.census.gov/geo/maps-data/data/tiger-line.html#tab_2013</url>
+      </date_source>
+    </federal>
+    <state_upper>
+      <state>NY</state>
+      <district>26</district>
+      <display_name>NY 26th</display_name>
+      <date_source>
+        <organization>U.S. Census</organization>
+        <url>http://www.census.gov/geo/maps-data/data/tiger-line.html#tab_2013</url>
+      </date_source>
+    </state_upper>
+    <state_lower>
+      <state>NY</state>
+      <district>66</district>
+      <display_name>NY 66th</display_name>
+      <date_source>
+        <organization>U.S. Census</organization>
+        <url>http://www.census.gov/geo/maps-data/data/tiger-line.html#tab_2013</url>
+      </date_source>
+    </state_lower>
+  </response>
+EOF
+ -%>
+  </code></pre>
+  <p>The api also support json, kml and georss.</p>
+</div>
+
+<div class="api">
+  <p>If no latitude and longitude is supplied:</p>
+  <a class="api" href="/districts/lookup.xml">http://congress.mcommons.com/districts/lookup.xml</a>
+  <pre><code class="xml">
+<%= <<-EOF
+  <?xml version="1.0" encoding="UTF-8"?>
+  <response>
+    <lat/>
+    <lng/>
+    <date>2014-04-16 15:16:10</date>
+    <message>That lat/lng is not inside a congressional district</message>
+    <error>Must supply lat and lng parameters</error>
+  </response>
+EOF
+-%>
+  </code></pre>
+</div>
+
+<div class="api">
+  <p>If the latitude and longitude is outside of the United States, and does not match any legislative district geographies:</p>
+  <a class="api" href="/districts/lookup.xml?lat=64.835054&lng=147.646528">http://congress.mcommons.com/districts/lookup.xml?lat=64.835054&amp;lng=147.646528</a>
+  <pre><code class="xml">
+<%= <<-EOF
+  <?xml version="1.0" encoding="UTF-8"?>
+  <response>
+    <lat>64.835054</lat>
+    <lng>147.646528</lng>
+    <date>2014-04-16 15:18:01</date>
+    <message>That lat/lng is not inside a congressional district</message>
+    <error>No districts found</error>
+  </response>
+EOF
+-%>
+  </code></pre>
+</div>
+
+<% content_for :footer do %>
+  <script type="text/javascript" charset="utf-8" async defer>
+  $(document).ready(function(){
+    var map_builder = PolygonMapBuilder;
+    map_builder.enableActions()
+  })
+  </script>
+<% end %>
+
+

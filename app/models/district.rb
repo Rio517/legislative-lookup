@@ -2,12 +2,13 @@
 #
 # Table name: districts
 #
-#  gid      :integer          not null, primary key
-#  state    :string(2)
-#  cd       :string(3)
-#  name     :string(100)
-#  the_geom :string           multi_polygon, -1
-#  level    :string(255)
+#  gid        :integer          not null, primary key
+#  state      :string(2)
+#  cd         :string(3)
+#  name       :string(100)
+#  the_geom   :string           multi_polygon, -1
+#  level      :string(255)
+#  dataset_id :integer
 #
 
 # Schema explanation:
@@ -19,30 +20,18 @@
 #     the_geom
 
 class District < ActiveRecord::Base
-  self.primary_key = "gid"
+  DEFAULT_EPSG_SRID_CODE = '4269' # (GCS_North_American_1983) - based on census data *.prj files.  See: http://prj2epsg.org/
 
-  COLORS = {
-    'federal' => 'red',
-    'state_upper' => 'green',
-    'state_lower' => 'blue'
-  }.freeze
+  belongs_to :dataset
 
-  DESCRIPTION = {
-    'federal' => 'Congressional District',
-    'state_upper' => 'Upper House District',
-    'state_lower' => 'Lower House District'
-  }.freeze
+  self.primary_key = "id"
 
-  named_scope :lookup, lambda {|lat, lng|
-    {:conditions => ["ST_Contains(the_geom, GeometryFromText('POINT(? ?)', -1))",lng.to_f,lat.to_f]}
-  }
-
-  def polygon
-    @polygon ||= self.the_geom[0]
-  end
+  scope :lookup, lambda {|lat, lng, datetime| lookup_all(lat,lng).valid_at(datetime) }
+  scope :valid_at, lambda{|datetime| where(["(expires_at IS NULL OR expires_at > ?) AND valid_at < ?", datetime, datetime]) }
+  scope :lookup_all, lambda {|lat, lng| where(["ST_Contains(the_geom,  ST_GeomFromText('POINT(? ?)', #{DEFAULT_EPSG_SRID_CODE}))",lng.to_f,lat.to_f]).includes(:dataset) }
 
   def color
-    COLORS.fetch(self.level)
+    LEVEL_COLORS.fetch(self.level)
   end
 
   def state_name
@@ -60,6 +49,47 @@ class District < ActiveRecord::Base
   def full_name
     "#{display_name} #{DESCRIPTION.fetch(level)}"
   end
+
+  def polygon_coordinates
+    self.the_geom.to_coordinates[0].compact
+  end
+
+  def exceptions
+    Scheduler::VALID_DATE_EXCEPTIONS[state_name][level.to_sym]
+  end
+
+  def has_exception?
+    !exceptions.blank?
+  end
+
+  # Finds datasets and states with non-numeric district names
+  #
+  # States like MA have non-numeric districts. When renamed, there are occssional inconsistances.  This method can be used to identify normaliztions that need to be made.
+  def self.unusual_district_names(column='cd')
+    unusual = District.select(District.column_names-['the_geom']).where("#{column} ~ '[A-Za-z]'")
+    unusual.each_with_object({}) do |unusual_hash, d|
+      unusual_hash[d.state_name] ||= {:names => {}, :count => 0}
+      unusual_hash[d.state_name][:names][d.dataset_id] ||= []
+      unusual_hash[d.state_name][:names][d.dataset_id] << d.cd
+      unusual_hash[d.state_name][:count] +=1
+    end
+    #unusual_hash.each{|state_name,names| names.each{|dataset,ids| puts [state_name, dataset, ids.size].join(', ') }} #useful for counting bad datasets
+  end
+
+  LEVEL_COLORS = {
+    'federal' => 'red',
+    'state_upper' => 'green',
+    'state_lower' => 'blue'
+  }.freeze
+
+
+  DESCRIPTION = {
+    'federal' => 'Congressional District',
+    'state_upper' => 'Upper State House District',
+    'state_lower' => 'Lower State House District'
+  }.freeze
+
+  LEVELS = DESCRIPTION.keys
 
   FIPS_CODES = {
     "01" => "AL",
@@ -115,13 +145,13 @@ class District < ActiveRecord::Base
     "56" => "WY",
     #non-states follow
     "60" => "AS",
-    "64" => "FM",
+    #"64" => "FM",  Not in census
     "66" => "GU",
     "68" => "MH",
     "69" => "MP",
-    "70" => "PW",
+    #"70" => "PW",
     "72" => "PR",
-    "74" => "UM",
+    #"74" => "UM",
     "78" => "VI"
   }
   STATES = FIPS_CODES.invert.freeze

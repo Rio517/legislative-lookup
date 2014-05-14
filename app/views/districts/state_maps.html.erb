@@ -1,0 +1,46 @@
+<style type="text/css" media="screen">
+  #main{width:90%;}
+  #content{float:none;padding-top:0;}
+</style>
+
+<div id="geo-box">
+  <h3>State Map Lookup</h3>
+  <form id="address_form">
+    <select type="text" id="state" name="state">
+      <%= options_for_select(['NY']+District::STATES.keys, params[:state]) %>
+    </select>
+    <select name="level" id="level">
+      <%= options_for_select(District::LEVELS, @level) %>
+    </select>
+    <input type="radio" name="DateOrDataset" value="#dataset_id"> <label title="Note">Use Dataset</label>
+    <select name="dataset_id" id="dataset_id" disabled="disabled">
+      <%= options_for_select(@datasets, params[:dataset_id]) %>
+    </select>
+    <input type="radio" name="DateOrDataset" value="#date" checked="checked"> <label>Use Date</label>
+    <select name="date" id="date">
+       <%= options_for_select(Scheduler.public_options, params[:level]) %>
+    </select>
+    <input type="submit" value="Lookup" class="button cupid-green"/>
+  </form>
+  <p class="quite">Note: Datasets are for exploring datasets loaded from different sources.  "census2013" is census data. Only census data covers all states.</p>
+</div>
+<div id="map-canvas" style="width:100%;min-height:600px;min-width:800px;"></div>
+
+<% content_for :footer do %>
+  <script type="text/javascript" charset="utf-8" async defer>
+  $(document).ready(function(){
+    $('input[name=DateOrDataset]').on('change', function(){
+      $('#dataset_id,#date').prop('disabled',true)
+      var target = $(this).val()
+      $(target).prop('disabled', false);
+    });
+
+    var map_builder = PolygonMapBuilder;
+    <% if @districts.present? %>
+      map_builder.districtDataToPolygons(<%= @districts %>);
+    <% end %>
+    map_builder.enableStateForm();
+  })
+  </script>
+<% end %>
+

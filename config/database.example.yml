@@ -2,7 +2,7 @@ development:
   adapter: postgresql
   database: congress_development
   username: postgres
-  password: 
+  password:
   host: 127.0.0.1
 
 test:

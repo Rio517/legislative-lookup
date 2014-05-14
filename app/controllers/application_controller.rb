@@ -2,7 +2,6 @@
 # Likewise, all the methods added will be available for all controllers.
 
 class ApplicationController < ActionController::Base
-  helper :all # include all helpers, all the time
 
   # See ActionController::RequestForgeryProtection for details
   # Uncomment the :secret if you're not using the cookie session store
@@ -11,12 +10,11 @@ class ApplicationController < ActionController::Base
   skip_before_filter :verify_authenticity_token # liger2 but not liger1 had this line added
   # One or both of the above lines turns off security features that weren't working nicely with ajax calls.
 
-  include ExceptionNotifiable
+  # include ExceptionNotifiable
 
   # See ActionController::Base for details
   # Uncomment this to filter the contents of submitted sensitive data parameters
   # from your application log (in this case, all fields with names like "password").
   # filter_parameter_logging :password
-
 
 end

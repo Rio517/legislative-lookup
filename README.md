@@ -4,82 +4,92 @@
 
 Rails application and database to lookup congressional and state legislative districts by latitude and longitude.
 
-## Installation
+## Dependencies
 
-Install Postgres and postGIS, set up a database, apply the appropriate functions and populate it.
+Install Postgres (9.1+) and postGIS (2+), set up a database, apply the appropriate functions and populate it.  The following works, but most up to date instructions can be found at the source: http://postgis.net/install/
 
 
-### Ubuntu 11.04 Start
+### Postsgres for Ubuntu 11.04
 
 Install Postgress
 
-    sudo apt-get install postgresql-contrib postgresql postgresql-9.1-postgis libpq-dev
+    sudo apt-get install postgresql-contrib postgresql postgresql-9.3-postgis libpq-dev gdal-bin
 
-Postgres won't let you connect without a password out of the box. Create a new postgres user with a password or configure postgres to trust all connections from localhost and make sure the "postgres" user in postgres doesn't have a password. These instruction assume the later. You can do that by editing `/etc/postgresql/8.4/main/pg_hba.conf` and adding a line ABOVE THE DEFAULT RULES like this:
+Postgres won't let you connect without a password out of the box. Create a new postgres user with a password or configure postgres to trust all connections from localhost and make sure the "postgres" user in postgres doesn't have a password. These instruction assume the later. You can do that by editing `/etc/postgresql/8.4/main/pg_hba.conf` and adding a line ABOVE THE DEFAULT RULES like below.  Make sure there are no overrides further down in your file:
 
     host    all         postgres    127.0.0.1/32          trust
 
-After you create your database you need to add required functions to your database. Note: You'll need to do the same for your test database.
-
-    DB="congress_development" # or whatever you want to call it
-    sudo -u postgres createdb -E UTF8 $DB
-    createlang -h localhost -U postgres plpgsql $DB
-    DB="congress_test"
-    psql -h localhost -U postgres -d $DB -f /usr/share/postgresql/9.1/contrib/postgis-1.5/postgis.sql
-    psql -h localhost -U postgres -d $DB -f /usr/share/postgresql/9.1/contrib/postgis-1.5/spatial_ref_sys.sql
-    psql -h localhost -U postgres -d $DB -c "select postgis_lib_version();" # to make sure postgis works
-
-### OSX 10.7 Start
+### Postsgres for OSX
 
 Download postgres.app from http://postgresapp.com/.
 Extract it.
 Copy it to Applications.
 
-    $ sudo cp /Applications/Postgres.app/Contents/MacOS/lib/libjpeg* /usr/local/lib # to make postgis work with postgres.app
-Run
- postgres.app.
+* `$ sudo cp /Applications/Postgres.app/Contents/MacOS/lib/libjpeg* /usr/local/lib` to make postgis work with postgres.app
+* Run `postgres.app.`
 
-    $ DB="congress_development"
-    $ psql -h localhost -c "CREATE DATABASE $DB;"
-    $ psql -h localhost -d $DB -c "CREATE EXTENSION postgis;"
+## Creating the DB, enabling postgres and seeding the DB
+
+After making any necessary updates to `database.yml`, the following would create the DB, enable postgis and seed it with test data for Rhode Island from db/test_data.sql.tar.gz.  If you're going to use the importers or don't need test data, leave off `rake db:seed`
+
+    rake db:create db:add_postgis db:migrate db:seed
 
 
-### Common Finish: Ruby Environment
+### Starting the App
 
-    gem update --system 1.3.7 # rails 2.2 doesn't completely work with new versions of rubygems. eg: 'rake gems:refresh_specs' will fail with rubygems 1.5.2
-    gem install postgres -v '0.7.9.2008.01.28' # this is what's used in production
-    gem install rdoc
-    gem install rspec -v 1.3.2
-    gem install rspec-rails -v 1.3.4
-    ./script/server
+    bundle install
+    rails server #note page may not load due to needed data.
 
-Visit http://localhost:3000/. The page should load although nothing will work yet because there's no data in the database. Run the following to load the full collection of shape files from census
 
-    rake db:migrate
-    rake shapefiles_113:prep_sql_files # Downloads files from census, unzip those files and convert with shp2pgsql.
-    rake shapefiles_113:import # Import sql files into temp tables, normalize naming converions and load into districts table.
+## Loading Real Data
+
+The `DatasetImporter` classes and subclasses have importers for census data and several state level data.  As of April 2014, censuses GIS files did not have correct state level legislative districts, hence the need for state level data. The DatasetImporter(s) essentially execute the following basic process:
+
+1. Download zipfiles from relevant sources
+2. Extract shapefiles
+3. Assess coordinate systems
+4. Import data to postgres, with correct coordinate mappings
+5. Normalize naming conventions among the datasets
+6. Combine data into a `pending_districts` table
+7. Run `Scheduler.schedule!` to assign the correct valid dates to imported datasets.  Valid districts are pulled unless a date param is submitted.
+8. Move `pending_districts` to the app's expected `districts` table for use in the app.
+
+You can execute this import process by running the following from `rails console`:
+
+    DatasetImporter::Base.import_and_process!
+    DatasetImporter::Base.temp_to_live! #when ready
+
+## Updating Datasets
+
+When new datasets are required or available, a few steps are required to update importing classes for new data.
+
+###Census
+
+If new census tiger files are available, you should:
+
+1. Add `DatasetImporter.new(:year => YYYY)` to the import commands in `DatasetImporter::Base`.
+2. Add a new session key to SESSION_KEYS `in DatasetImporter::Census`
+3. Update Scheduler with the relevant dates for your new dataset.
+
+
+### State Level Data
+
+While note difficult creating state level imports can be more challenging.  You'll have to get more into the code.
+
+1. Find the urls for the zip files you'll need to download.
+2. Create a new `DatasetImporter::StateAbbreviation < DatasetImporter::StateBase` for your state.
+3. Update and modify the four methods from, for example, `DatasetImporter::Ky` as appropriate for your data.
+4. Update Scheduler with the relevant dates for your new dataset.
+5. Add an import command to `DatasetImporter::Base`.
+
+The above steps have been completed for [http://congress.mcommons.org](http://congress.mcommons.org).
 
 ## Testing
 
 To run specs, you need to seed the database with sample polygons.  This repo contains sql imports for Rhode Island. To execute run:
 
-    rake db:test:prepare
+    rake db:test:prepare # redefined in lib/tasks/database.rb
     rake spec
-
-## Updating Data
-
-District data is imported using the code in `lib/tasks/shapefile_procssing.rake`. Run `rake -T shapefiles_113` from terminal to view the available tasks.  Those tasks execute the basic process for updating district data, as outlined below.
-
-1. Download the relevant zipped shape files with the new data - from the [U.S. Census](https://www.census.gov/rdo/data/113th_congressional_and_new_state_legislative_district_plans.html).
-2. Unzip the shape files.
-3. Use shp2pgsql to convert the shape files to sql that will put it in temporary tables.
-4. Execute that sql for federal and then state data.
-5. Normalize the data in the temp tables.
-6. Copy the temporary data into the final `districts` table.
-7. Delete the temporary tables.
-
-The above steps have been completed for [http://congress.mcommons.org](http://congress.mcommons.org). Please review the tasks and code in `lib/tasks/shapefile_procssing.rake`
-
 
 
 ## Authors
@@ -89,11 +99,12 @@ The above steps have been completed for [http://congress.mcommons.org](http://co
  - [Mal McKay](mailto:mal@mcommons.com)
  - [Mario Olivio Flores](mailto:mflores3@gmail.com)
  - [Dan Benamy](mailto:dbenamy@mcommons.com)
+ - Special thanks to the research of [Katherine Snedden](mailto:katherine@mobilecommons.com)
 
 Project sponsored by [Mobile Commons](http://www.mobilecommons.com/)
 
 
 ## License
 
-Copyright (c) 2008-2012 Mobile Commons
+Copyright (c) 2008-2014 Mobile Commons
 See MIT-LICENSE in this directory.
